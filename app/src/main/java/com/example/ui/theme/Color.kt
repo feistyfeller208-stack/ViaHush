@@ -11,6 +11,7 @@ val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
 // Hush Premium Palette
+val HushViolet = Color(0xFF7C4DFF)
 val MidnightBlack = Color(0xFF090A0E)
 val SlateCard = Color(0xFF151821)
 val SlateCardSecondary = Color(0xFF222635)

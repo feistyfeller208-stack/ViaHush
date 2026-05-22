@@ -419,88 +419,143 @@ fun FeedScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "CONTACT ONLY",
-                                fontSize = 11.sp,
-                                color = HushViolet,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
-                        }
+LazyColumn(
+    modifier = Modifier
+        .fillMaxSize()
+        .padding(horizontal = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(16.dp)
+) {
+    // App Custom Title Banner
+    item {
+        Spacer(modifier = Modifier.height(16.dp))
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "hush",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-1).sp,
+                            fontFamily = FontFamily.Serif
+                        ),
+                        color = Color.White
+                    )
+                    Text(
+                        text = " .",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.Serif
+                        ),
+                        color = HushViolet
+                    )
+                }
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SlateCardSecondary)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Encrypted State",
+                            tint = HushViolet,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "CONTACT ONLY",
+                            fontSize = 11.sp,
+                            color = HushViolet,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
 
-                        IconButton(
-                            onClick = { showSettingsDialog = true },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(SlateCardSecondary)
-                                .testTag("settings_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        
-            // Build a merged feed list: posts interleaved with suggestion cards
-            val feedItems = buildList {
-                instagramPosts.forEachIndexed { index, post ->
-                    add(Pair("post", index))
-                    if ((index + 1) % 2 == 0 && suggestions.isNotEmpty()) {
-                        val suggIdx = ((index + 1) / 2 - 1) % suggestions.size
-                        add(Pair("suggestion", suggIdx))
+                    IconButton(
+                        onClick = { showSettingsDialog = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(SlateCardSecondary)
+                            .testTag("settings_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
-            items(feedItems, key = { (type, idx) -> "${type}_${idx}" }) { (type, idx) ->
-                if (type == "post") {
-                    val post = instagramPosts[idx]
-                    InstagramPostCard(
-                        post = post,
-                        allReplies = allReplies,
-                        allUsers = allUsers,
-                        statusLifespan = statusLifespan,
-                        onOpenFullscreen = { onOpenStories(post.originalGroup) },
-                        onReply = { inlineText -> onReplyToStory(post.story.id, post.user.phoneNumber, inlineText) },
-                        onDelete = { onDeleteStory(post.story.id) },
-                        onLike = { onLikeStory(post.story.id) }
-                    )
-                } else {
-                    val suggestion = suggestions[idx]
-                    SuggestionCard(
-                        suggestion = suggestion,
-                        onFollow = { onAddContact(suggestion.phone, suggestion.name) },
-                        onInviteWhatsApp = {
-                            val phone = suggestion.phone.replace(Regex("[^0-9+]"), "")
-                            val msg = "Hey! I'm using Hush — a private status app. Join me! 🤫"
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                data = android.net.Uri.parse("https://wa.me/$phone?text=${android.net.Uri.encode(msg)}")
-                            }
-                            try { context.startActivity(intent) }
-                            catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
-                        },
-                        onInviteSms = {
-                            val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
-                                data = android.net.Uri.parse("smsto:${suggestion.phone}")
-                                putExtra("sms_body", "Hey! Join me on Hush, a private status app 🤫")
-                            }
-                            try { context.startActivity(intent) }
-                            catch (e: Exception) { Toast.makeText(context, "SMS not available", Toast.LENGTH_SHORT).show() }
-                        }
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(4.dp))
         }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
 
-        item {
-            Spacer(modifier = Modifier.height(32.dp))
+    val feedItems = buildList {
+        instagramPosts.forEachIndexed { index, post ->
+            add(Pair("post", index))
+            if ((index + 1) % 2 == 0 && suggestions.isNotEmpty()) {
+                val suggIdx = ((index + 1) / 2 - 1) % suggestions.size
+                add(Pair("suggestion", suggIdx))
+            }
         }
     }
+    
+    items(feedItems, key = { (type, idx) -> "${type}_${idx}" }) { (type, idx) ->
+        if (type == "post") {
+            val post = instagramPosts[idx]
+            InstagramPostCard(
+                post = post,
+                allReplies = allReplies,
+                allUsers = allUsers,
+                statusLifespan = statusLifespan,
+                onOpenFullscreen = { onOpenStories(post.originalGroup) },
+                onReply = { inlineText -> onReplyToStory(post.story.id, post.user.phoneNumber, inlineText) },
+                onDelete = { onDeleteStory(post.story.id) },
+                onLike = { onLikeStory(post.story.id) }
+            )
+        } else {
+            val suggestion = suggestions[idx]
+            SuggestionCard(
+                suggestion = suggestion,
+                onFollow = { onAddContact(suggestion.phone, suggestion.name) },
+                onInviteWhatsApp = {
+                    val phone = suggestion.phone.replace(Regex("[^0-9+]"), "")
+                    val msg = "Hey! I'm using Hush — a private status app. Join me! 🤫"
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        data = android.net.Uri.parse("https://wa.me/$phone?text=${android.net.Uri.encode(msg)}")
+                    }
+                    try { context.startActivity(intent) }
+                    catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
+                },
+                onInviteSms = {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                        data = android.net.Uri.parse("smsto:${suggestion.phone}")
+                        putExtra("sms_body", "Hey! Join me on Hush, a private status app 🤫")
+                    }
+                    try { context.startActivity(intent) }
+                    catch (e: Exception) { Toast.makeText(context, "SMS not available", Toast.LENGTH_SHORT).show() }
+                }
+            )
+        }
+    }
+
+    item {
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+} 
 
     if (showSettingsDialog) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { showSettingsDialog = false }) {

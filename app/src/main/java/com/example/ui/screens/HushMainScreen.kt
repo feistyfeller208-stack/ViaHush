@@ -446,7 +446,7 @@ fun FeedScreen(
                 Spacer(modifier = Modifier.height(4.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
-        } else {
+        
             // Build a merged feed list: posts interleaved with suggestion cards
             val feedItems = buildList {
                 instagramPosts.forEachIndexed { index, post ->

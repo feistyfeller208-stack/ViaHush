@@ -456,7 +456,7 @@ fun FeedScreen(
                         add(Pair("suggestion", suggIdx))
                     }
                 }
-            }
+            
             items(feedItems, key = { (type, idx) -> "${type}_${idx}" }) { (type, idx) ->
                 if (type == "post") {
                     val post = instagramPosts[idx]

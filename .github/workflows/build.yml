@@ -29,11 +29,10 @@ jobs:
           fi
           chmod +x gradlew
 
-      - name: Generate debug keystore
+      - name: Generate debug keystore at project root
         run: |
-          mkdir -p $HOME/.android
           keytool -genkeypair -v \
-            -keystore $HOME/.android/debug.keystore \
+            -keystore debug.keystore \
             -alias androiddebugkey \
             -keyalg RSA -keysize 2048 \
             -validity 10000 \

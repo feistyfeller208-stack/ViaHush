@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,6 +48,9 @@ import com.example.data.model.StatusStory
 import com.example.data.model.StatusReply
 import com.example.data.model.ContactRelation
 import com.example.data.repository.UserStatusGroup
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.ChatChannel
 import com.example.ui.viewmodel.HushViewModel
@@ -86,6 +91,7 @@ fun HushMainScreen(viewModel: HushViewModel) {
     val statusGroups by viewModel.statusGroupsState.collectAsState()
     val allUsers by viewModel.allUsersState.collectAsState()
     val contacts by viewModel.contactsState.collectAsState()
+    val scannedContacts by viewModel.scannedContacts.collectAsState()
     val activeChatPartnerPhone by viewModel.activeChatPartner.collectAsState()
     val chatChannelMessages by viewModel.activeChatMessages.collectAsState()
     val chatChannels by viewModel.chatChannelsState.collectAsState()
@@ -130,8 +136,8 @@ fun HushMainScreen(viewModel: HushViewModel) {
                             icon = { Icon(Icons.Default.Home, contentDescription = "Feed") },
                             label = { Text("Feed", fontWeight = FontWeight.SemiBold) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = HushViolet,
-                                selectedTextColor = HushViolet,
+                                selectedIconColor = NeonTeal,
+                                selectedTextColor = NeonTeal,
                                 indicatorColor = SlateCardSecondary,
                                 unselectedIconColor = MutedText,
                                 unselectedTextColor = MutedText
@@ -144,7 +150,7 @@ fun HushMainScreen(viewModel: HushViewModel) {
                             icon = { 
                                 BadgedBox(badge = {
                                     if (chatChannels.isNotEmpty()) {
-                                        Badge(containerColor = HushViolet) { Text(chatChannels.size.toString()) }
+                                        Badge(containerColor = InstagramPink) { Text(chatChannels.size.toString()) }
                                     }
                                 }) {
                                     Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Whispers")
@@ -152,8 +158,8 @@ fun HushMainScreen(viewModel: HushViewModel) {
                             },
                             label = { Text("Whispers", fontWeight = FontWeight.SemiBold) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = HushViolet,
-                                selectedTextColor = HushViolet,
+                                selectedIconColor = NeonTeal,
+                                selectedTextColor = NeonTeal,
                                 indicatorColor = SlateCardSecondary,
                                 unselectedIconColor = MutedText,
                                 unselectedTextColor = MutedText
@@ -166,8 +172,8 @@ fun HushMainScreen(viewModel: HushViewModel) {
                             icon = { Icon(Icons.Default.PersonAdd, contentDescription = "Local Contacts") },
                             label = { Text("Discover", fontWeight = FontWeight.SemiBold) },
                             colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = HushViolet,
-                                        selectedTextColor = HushViolet,
+                                        selectedIconColor = NeonTeal,
+                                        selectedTextColor = NeonTeal,
                                         indicatorColor = SlateCardSecondary,
                                         unselectedIconColor = MutedText,
                                         unselectedTextColor = MutedText
@@ -182,7 +188,7 @@ fun HushMainScreen(viewModel: HushViewModel) {
                 if (currentTab == "Feed" && activeChatPartnerPhone == null && selectedStatusGroupForViewer == null && !showCreateStatusScreen) {
                     FloatingActionButton(
                         onClick = { showCreateStatusScreen = true },
-                        containerColor = HushViolet,
+                        containerColor = InstagramPink,
                         contentColor = Color.White,
                         modifier = Modifier
                             .navigationBarsPadding()
@@ -207,8 +213,9 @@ fun HushMainScreen(viewModel: HushViewModel) {
                             currentUser = currentUser,
                             allReplies = allReplies,
                             allUsers = allUsers,
-                            contacts = contacts,
                             statusLifespan = statusLifespan,
+                            scannedContacts = scannedContacts,
+                            contacts = contacts,
                             onLifespanChange = { viewModel.updateLifespan(it) },
                             onOpenStories = { group -> selectedStatusGroupForViewer = group },
                             onCreateStatus = { showCreateStatusScreen = true },
@@ -221,10 +228,11 @@ fun HushMainScreen(viewModel: HushViewModel) {
                             onLikeStory = { storyId ->
                                 viewModel.markStoryAsViewed(storyId)
                             },
-                            onAddContact = { p, nick -> viewModel.addLocalContact(p, nick) },
                             onUpdateProfile = { name, emoji, colorHex, bio ->
                                 viewModel.updateUserProfile(name, emoji, colorHex, bio)
-                            }
+                            },
+                            onAddContact = { p, nick -> viewModel.addLocalContact(p, nick) },
+                            onSyncContacts = { list -> viewModel.syncDeviceContacts(list) }
                         )
                     }
                     "ChatList" -> WhispersChatListScreen(
@@ -308,15 +316,8 @@ data class InstagramPostItem(
     val user: User,
     val relationship: String,
     val intermediaryName: String,
-    val story: StatusStory,
+    val stories: List<StatusStory>,
     val originalGroup: UserStatusGroup
-)
-
-// Represents a device contact suggestion shown inline in the feed
-data class DeviceContactSuggestion(
-    val name: String,
-    val phone: String,
-    val matchedUser: User?
 )
 
 @Composable
@@ -325,43 +326,42 @@ fun FeedScreen(
     currentUser: User?,
     allReplies: List<StatusReply>,
     allUsers: List<User>,
-    contacts: List<ContactRelation>,
     statusLifespan: Long,
+    scannedContacts: List<Pair<String, String>>,
+    contacts: List<ContactRelation>,
     onLifespanChange: (Long) -> Unit,
     onOpenStories: (UserStatusGroup) -> Unit,
     onCreateStatus: () -> Unit,
-    onReplyToStory: (Int, String, String) -> Unit,
+    onReplyToStory: (Int, String, String) -> Unit, // storyId, receiverPhone, message
     onDeleteStory: (Int) -> Unit,
     onLikeStory: (Int) -> Unit,
+    onUpdateProfile: (String, String, String, String) -> Unit,
     onAddContact: (String, String) -> Unit,
-    onUpdateProfile: (String, String, String, String) -> Unit
+    onSyncContacts: (List<Pair<String, String>>) -> Unit
 ) {
     val myGroup = statusGroups.find { it.relationship == "Me" }
     var showSettingsDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    val myPhone = currentUser?.phoneNumber ?: ""
-    val directPhones = contacts.filter { it.ownerPhone == myPhone }.map { it.contactPhone }.toSet()
-    val suggestions = remember(allUsers, directPhones, myPhone) {
-        allUsers
-            .filter { it.phoneNumber != myPhone && it.phoneNumber !in directPhones }
-            .map { DeviceContactSuggestion(it.name, it.phoneNumber, it) }
-            .take(6)
+    // Group active status stories by user into carousels, sorted newest-first!
+    val instagramPosts = remember(statusGroups) {
+        statusGroups.filter { it.statuses.isNotEmpty() }.map { group ->
+            InstagramPostItem(
+                user = group.user,
+                relationship = group.relationship,
+                intermediaryName = group.intermediaryName,
+                stories = group.statuses.sortedBy { it.timestamp }, // Chronological order
+                originalGroup = group
+            )
+        }.sortedByDescending { it.stories.maxOfOrNull { s -> s.timestamp } ?: 0L }
     }
 
-    // Flatten all active status stories into a list of Instagram posts, sorted newest-first!
-    val instagramPosts = remember(statusGroups) {
-        statusGroups.flatMap { group ->
-            group.statuses.map { story ->
-                InstagramPostItem(
-                    user = group.user,
-                    relationship = group.relationship,
-                    intermediaryName = group.intermediaryName,
-                    story = story,
-                    originalGroup = group
-                )
-            }
-        }.sortedByDescending { it.story.timestamp }
+    val myPhone = currentUser?.phoneNumber ?: ""
+    val directPhones = remember(contacts, myPhone) {
+        contacts.filter { it.ownerPhone == myPhone }.map { it.contactPhone }.toSet()
+    }
+    val suggestedItems = remember(scannedContacts, directPhones, myPhone) {
+        scannedContacts.filter { it.second != myPhone && it.second !in directPhones }
     }
 
     LazyColumn(
@@ -395,7 +395,7 @@ fun FeedScreen(
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = FontFamily.Serif
                             ),
-                            color = HushViolet
+                            color = NeonTeal
                         )
                     }
                     
@@ -413,149 +413,372 @@ fun FeedScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = "Encrypted State",
-                                tint = HushViolet,
+                                tint = WhatsAppGreen,
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "CONTACT ONLY",
-LazyColumn(
-    modifier = Modifier
-        .fillMaxSize()
-        .padding(horizontal = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp)
-) {
-    // App Custom Title Banner
-    item {
-        Spacer(modifier = Modifier.height(16.dp))
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "hush",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = (-1).sp,
-                            fontFamily = FontFamily.Serif
-                        ),
-                        color = Color.White
-                    )
-                    Text(
-                        text = " .",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = FontFamily.Serif
-                        ),
-                        color = HushViolet
-                    )
+                                fontSize = 11.sp,
+                                color = WhatsAppGreen,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showSettingsDialog = true },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SlateCardSecondary)
+                                .testTag("settings_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // ------------------ SUGGESTED CONTACTS SECTION ------------------
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SlateCard),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("suggested_contacts_section")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SlateCardSecondary)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Encrypted State",
-                            tint = HushViolet,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "CONTACT ONLY",
+                            text = "SUGGESTED CONTACTS",
                             fontSize = 11.sp,
-                            color = HushViolet,
                             fontWeight = FontWeight.Bold,
+                            color = NeonTeal,
                             letterSpacing = 1.sp
                         )
+                        if (suggestedItems.isNotEmpty()) {
+                            Text(
+                                text = "${suggestedItems.size} FOUND",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = WhatsAppGreen,
+                                modifier = Modifier
+                                    .background(WhatsAppGreen.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    IconButton(
-                        onClick = { showSettingsDialog = true },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(SlateCardSecondary)
-                            .testTag("settings_btn")
-                    ) {
+                    if (suggestedItems.isEmpty()) {
+                        // Empty/un-scanned state: Prompt the user to scan or simulate contacts!
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Find security-conscious friends",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = LightText
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Scan contacts to reveal registered status circles on-device.",
+                                fontSize = 11.sp,
+                                color = MutedText,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            val permissionLauncher = rememberLauncherForActivityResult(
+                                contract = ActivityResultContracts.RequestPermission()
+                            ) { isGranted ->
+                                if (isGranted) {
+                                    val deviceContacts = scanDeviceContacts(context)
+                                    if (deviceContacts.isNotEmpty()) {
+                                        onSyncContacts(deviceContacts)
+                                        Toast.makeText(context, "Successfully synced ${deviceContacts.size} contacts! 🤫", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "No device contacts found. Try simulating sync!", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Contact permission denied.", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonTeal, contentColor = MidnightBlack),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("feed_scan_btn")
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Contacts, contentDescription = "Scan", modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Scan", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val mock = listOf(
+                                            Pair("Alice Rivera", "+15550002"),
+                                            Pair("Charlie Chen", "+15550003"),
+                                            Pair("Bob Miller", "+15550004"),
+                                            Pair("Diana Prince", "+15550005"),
+                                            Pair("Emily Blunt", "+15550009"),
+                                            Pair("Frank Castle", "+15550010")
+                                        )
+                                        onSyncContacts(mock)
+                                        Toast.makeText(context, "Simulated device contacts loaded! 🤫", Toast.LENGTH_LONG).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SlateCardSecondary, contentColor = NeonTeal),
+                                    border = BorderStroke(1.dp, NeonTeal.copy(alpha = 0.4f)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("feed_simulate_btn")
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.DeviceHub, contentDescription = "Simulate", modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Simulate", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Horizontal scroll row of scanned suggestions!
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(suggestedItems) { item ->
+                                val regUser = allUsers.find { u ->
+                                    val uClean = u.phoneNumber.filter { it.isDigit() || it == '+' }
+                                    val itemClean = item.second.filter { it.isDigit() || it == '+' }
+                                    uClean == itemClean || (itemClean.length >= 7 && uClean.endsWith(itemClean))
+                                }
+
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = SlateCardSecondary),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, if (regUser != null) NeonTeal.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f)),
+                                    modifier = Modifier
+                                        .width(135.dp)
+                                        .padding(vertical = 4.dp)
+                                        .testTag("suggestion_card_${item.second}")
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        // Avatar block
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(regUser?.avatarColorHex?.toColor() ?: Color.Gray.copy(alpha = 0.3f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = regUser?.avatarEmoji ?: "👤",
+                                                fontSize = 18.sp
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        // Name
+                                        Text(
+                                            text = item.first,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+
+                                        // Phone or subtitle
+                                        Text(
+                                            text = if (regUser != null) "On Hush" else "Not on Hush",
+                                            color = if (regUser != null) NeonTeal else MutedText,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        if (regUser != null) {
+                                            // Auto add
+                                            Button(
+                                                onClick = {
+                                                    onAddContact(regUser.phoneNumber, item.first)
+                                                    Toast.makeText(context, "Added ${item.first}!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = NeonTeal, contentColor = MidnightBlack),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(26.dp)
+                                                    .testTag("add_suggested_${regUser.phoneNumber}")
+                                            ) {
+                                                Text("+ Add", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        } else {
+                                            // Non-registered invite: SMS & WhatsApp invitation options!
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                // WA Invite
+                                                IconButton(
+                                                    onClick = {
+                                                        try {
+                                                            val msg = "Hey ${item.first}! Add me on Hush, a secure stealth social status feed. Tap to join: https://hush.social/join"
+                                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                                data = Uri.parse("https://api.whatsapp.com/send?phone=${item.second.filter { it.isDigit() || it == '+' }}&text=${Uri.encode(msg)}")
+                                                            }
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Could not launch WA", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(26.dp)
+                                                        .background(WhatsAppGreen.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                                        .testTag("wa_invite_${item.second}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Share, 
+                                                        contentDescription = "WhatsApp Invite", 
+                                                        tint = WhatsAppGreen,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+
+                                                // SMS Invite
+                                                IconButton(
+                                                    onClick = {
+                                                        try {
+                                                            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                                                data = Uri.parse("smsto:${item.second}")
+                                                                putExtra("sms_body", "Hey ${item.first}! Add me on Hush, a secure stealth social status feed. Tap here to join: https://hush.social/join")
+                                                            }
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Could not launch SMS", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .height(26.dp)
+                                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                                                        .testTag("sms_invite_${item.second}")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Sms, 
+                                                        contentDescription = "SMS Invite", 
+                                                        tint = LightText,
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+
+
+        // Expiry control card has been moved into the Settings dialog to declutter the home feed page!
+
+        // Render feed lists
+        if (instagramPosts.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Default.AllInbox,
+                            contentDescription = "No stories",
+                            tint = MutedText,
+                            modifier = Modifier.size(54.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No silent statuses found.",
+                            color = LightText,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Add contacts or post an update to see stories here.",
+                            color = MutedText,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-    }
-
-    val feedItems = buildList {
-        instagramPosts.forEachIndexed { index, post ->
-            add(Pair("post", index))
-            if ((index + 1) % 2 == 0 && suggestions.isNotEmpty()) {
-                val suggIdx = ((index + 1) / 2 - 1) % suggestions.size
-                add(Pair("suggestion", suggIdx))
+        } else {
+            items(instagramPosts, key = { "post_${it.user.phoneNumber}" }) { post ->
+                InstagramPostCard(
+                    post = post,
+                    allReplies = allReplies,
+                    allUsers = allUsers,
+                    statusLifespan = statusLifespan,
+                    onOpenFullscreen = { onOpenStories(post.originalGroup) },
+                    onReply = { storyId, inlineText -> onReplyToStory(storyId, post.user.phoneNumber, inlineText) },
+                    onDelete = { storyId -> onDeleteStory(storyId) },
+                    onLike = { storyId -> onLikeStory(storyId) }
+                )
             }
         }
-    }
-    
-    items(feedItems, key = { (type, idx) -> "${type}_${idx}" }) { (type, idx) ->
-        if (type == "post") {
-            val post = instagramPosts[idx]
-            InstagramPostCard(
-                post = post,
-                allReplies = allReplies,
-                allUsers = allUsers,
-                statusLifespan = statusLifespan,
-                onOpenFullscreen = { onOpenStories(post.originalGroup) },
-                onReply = { inlineText -> onReplyToStory(post.story.id, post.user.phoneNumber, inlineText) },
-                onDelete = { onDeleteStory(post.story.id) },
-                onLike = { onLikeStory(post.story.id) }
-            )
-        } else {
-            val suggestion = suggestions[idx]
-            SuggestionCard(
-                suggestion = suggestion,
-                onFollow = { onAddContact(suggestion.phone, suggestion.name) },
-                onInviteWhatsApp = {
-                    val phone = suggestion.phone.replace(Regex("[^0-9+]"), "")
-                    val msg = "Hey! I'm using Hush — a private status app. Join me! 🤫"
-                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                        data = android.net.Uri.parse("https://wa.me/$phone?text=${android.net.Uri.encode(msg)}")
-                    }
-                    try { context.startActivity(intent) }
-                    catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
-                },
-                onInviteSms = {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
-                        data = android.net.Uri.parse("smsto:${suggestion.phone}")
-                        putExtra("sms_body", "Hey! Join me on Hush, a private status app 🤫")
-                    }
-                    try { context.startActivity(intent) }
-                    catch (e: Exception) { Toast.makeText(context, "SMS not available", Toast.LENGTH_SHORT).show() }
-                }
-            )
+
+        item {
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
-
-    item {
-        Spacer(modifier = Modifier.height(32.dp))
-    }
-} 
 
     if (showSettingsDialog) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { showSettingsDialog = false }) {
@@ -604,13 +827,6 @@ LazyColumn(
 
                     // Profile Section
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = "YOUR PRIVATE HUSH IDENTITY",
-                            fontSize = 11.sp,
-                            color = HushViolet,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -622,7 +838,7 @@ LazyColumn(
                                     .size(54.dp)
                                     .clip(CircleShape)
                                     .background(editColorHex.toColor())
-                                    .border(2.dp, HushViolet.copy(alpha = 0.5f), CircleShape),
+                                    .border(2.dp, NeonTeal.copy(alpha = 0.5f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(editEmoji, fontSize = 24.sp)
@@ -634,11 +850,11 @@ LazyColumn(
                                 label = { Text("Display Name", fontSize = 11.sp) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = HushViolet,
+                                    focusedBorderColor = NeonTeal,
                                     unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
                                     focusedTextColor = LightText,
                                     unfocusedTextColor = LightText,
-                                    focusedLabelColor = HushViolet,
+                                    focusedLabelColor = NeonTeal,
                                     unfocusedLabelColor = MutedText
                                 ),
                                 shape = RoundedCornerShape(10.dp),
@@ -652,11 +868,11 @@ LazyColumn(
                             label = { Text("About / Whisper Bio", fontSize = 11.sp) },
                             maxLines = 2,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = HushViolet,
+                                focusedBorderColor = NeonTeal,
                                 unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
                                 focusedTextColor = LightText,
                                 unfocusedTextColor = LightText,
-                                focusedLabelColor = HushViolet,
+                                focusedLabelColor = NeonTeal,
                                 unfocusedLabelColor = MutedText
                             ),
                             shape = RoundedCornerShape(10.dp),
@@ -664,7 +880,7 @@ LazyColumn(
                         )
 
                         Column {
-                            Text("SELECT PROFILE AVATAR EMOJI", fontSize = 10.sp, color = MutedText, fontWeight = FontWeight.Bold)
+                            Text("Avatar", fontSize = 11.sp, color = MutedText, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(4.dp))
                             val emojis = listOf("🤐", "🤫", "🕵️", "🦁", "🦄", "🚀", "🛸", "👾", "🔮", "🎨")
                             LazyRow(
@@ -676,8 +892,8 @@ LazyColumn(
                                         modifier = Modifier
                                             .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(if (currentEmoji == editEmoji) HushViolet.copy(alpha = 0.25f) else SlateCardSecondary)
-                                            .border(1.dp, if (currentEmoji == editEmoji) HushViolet else Color.Transparent, CircleShape)
+                                            .background(if (currentEmoji == editEmoji) NeonTeal.copy(alpha = 0.25f) else SlateCardSecondary)
+                                            .border(1.dp, if (currentEmoji == editEmoji) NeonTeal else Color.Transparent, CircleShape)
                                             .clickable { editEmoji = currentEmoji },
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -688,7 +904,7 @@ LazyColumn(
                         }
 
                         Column {
-                            Text("SELECT AVATAR BG COLOR", fontSize = 10.sp, color = MutedText, fontWeight = FontWeight.Bold)
+                            Text("Color", fontSize = 11.sp, color = MutedText, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(4.dp))
                             val colorsList = listOf("#1E1E1E", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#EF4444", "#2A3B4C")
                             LazyRow(
@@ -719,7 +935,7 @@ LazyColumn(
                                     Toast.makeText(context, "Display name cannot be blank.", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = HushViolet, contentColor = Color.White),
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonTeal, contentColor = MidnightBlack),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth().testTag("save_profile_btn")
                         ) {
@@ -734,7 +950,7 @@ LazyColumn(
                         Text(
                             text = "STATUS EXPIRY LIFESPAN",
                             fontSize = 11.sp,
-                            color = HushViolet,
+                            color = NeonTeal,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
@@ -763,7 +979,7 @@ LazyColumn(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) HushViolet else SlateCardSecondary)
+                                        .background(if (isSelected) NeonTeal else SlateCardSecondary)
                                         .clickable { onLifespanChange(duration) }
                                         .padding(vertical = 8.dp),
                                     contentAlignment = Alignment.Center
@@ -793,7 +1009,7 @@ LazyColumn(
                         Text(
                             text = "PRIVACY OPTIONS",
                             fontSize = 11.sp,
-                            color = HushViolet,
+                            color = NeonTeal,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
@@ -813,7 +1029,7 @@ LazyColumn(
                                 onCheckedChange = { mockToggle1 = it },
                                 colors = androidx.compose.material3.SwitchDefaults.colors(
                                     checkedThumbColor = MidnightBlack,
-                                    checkedTrackColor = HushViolet,
+                                    checkedTrackColor = NeonTeal,
                                     uncheckedThumbColor = MutedText,
                                     uncheckedTrackColor = SlateCardSecondary
                                 )
@@ -835,117 +1051,12 @@ LazyColumn(
                                 onCheckedChange = { mockToggle2 = it },
                                 colors = androidx.compose.material3.SwitchDefaults.colors(
                                     checkedThumbColor = MidnightBlack,
-                                    checkedTrackColor = HushViolet,
+                                    checkedTrackColor = NeonTeal,
                                     uncheckedThumbColor = MutedText,
                                     uncheckedTrackColor = SlateCardSecondary
                                 )
                             )
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-// ==================== INLINE SUGGESTION CARD ====================
-@Composable
-fun SuggestionCard(
-    suggestion: DeviceContactSuggestion,
-    onFollow: () -> Unit,
-    onInviteWhatsApp: () -> Unit,
-    onInviteSms: () -> Unit
-) {
-    val isOnHush = suggestion.matchedUser != null
-    Card(
-        colors = CardDefaults.cardColors(containerColor = SlateCard),
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, HushViolet.copy(alpha = 0.2f)),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Avatar
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isOnHush) suggestion.matchedUser!!.avatarColorHex.toColor()
-                            else SlateCardSecondary
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = suggestion.matchedUser?.avatarEmoji ?: suggestion.name.first().toString(),
-                        fontSize = if (isOnHush) 20.sp else 16.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = suggestion.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = if (isOnHush) "Already on Hush" else "Not on Hush yet",
-                        color = if (isOnHush) HushViolet else MutedText,
-                        fontSize = 11.sp,
-                        fontWeight = if (isOnHush) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-
-                // Primary action button
-                if (isOnHush) {
-                    Button(
-                        onClick = onFollow,
-                        colors = ButtonDefaults.buttonColors(containerColor = HushViolet, contentColor = Color.White),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Text("Follow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            // Invite buttons for non-Hush contacts
-            if (!isOnHush) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Button(
-                        onClick = onInviteWhatsApp,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF25D366),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("Invite on WhatsApp", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    OutlinedButton(
-                        onClick = onInviteSms,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        modifier = Modifier.weight(1f).height(34.dp)
-                    ) {
-                        Text("SMS", fontSize = 11.sp)
                     }
                 }
             }
@@ -960,24 +1071,22 @@ fun InstagramPostCard(
     allUsers: List<User>,
     statusLifespan: Long,
     onOpenFullscreen: () -> Unit,
-    onReply: (String) -> Unit,
-    onDelete: () -> Unit,
-    onLike: () -> Unit
+    onReply: (Int, String) -> Unit, // storyId, message
+    onDelete: (Int) -> Unit,        // storyId
+    onLike: (Int) -> Unit           // storyId
 ) {
     var replyText by remember { mutableStateOf("") }
     val context = LocalContext.current
+    
+    val pagerState = rememberPagerState(pageCount = { post.stories.size })
+    val currentStoryIndex = pagerState.currentPage
+    val currentStory = post.stories.getOrNull(currentStoryIndex) ?: post.stories.first()
+    
     var isLiked by remember { mutableStateOf(false) }
 
-    val gradientBrush = Brush.linearGradient(
-        colors = listOf(
-            post.story.startColorHex.toColor(),
-            post.story.endColorHex.toColor()
-        )
-    )
-
-    // Calculate real-time countdown timer
+    // Calculate real-time countdown timer for currently focused story
     val now = System.currentTimeMillis()
-    val timeLeftMs = statusLifespan - (now - post.story.timestamp)
+    val timeLeftMs = statusLifespan - (now - currentStory.timestamp)
     val timeLeftText = remember(timeLeftMs, statusLifespan) {
         if (timeLeftMs <= 0) {
             "Expiring now..."
@@ -998,11 +1107,11 @@ fun InstagramPostCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .testTag("instagram_post_${post.story.id}"),
+            .testTag("instagram_post_user_${post.user.phoneNumber}"),
         border = BorderStroke(
             1.dp,
-            if (post.relationship == "Second-Degree Contact") HushViolet.copy(alpha = 0.25f)
-            else HushViolet.copy(alpha = 0.15f)
+            if (post.relationship == "Second-Degree Contact") InstagramPink.copy(alpha = 0.25f)
+            else NeonTeal.copy(alpha = 0.15f)
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -1018,11 +1127,11 @@ fun InstagramPostCard(
                         .size(44.dp)
                         .drawBehind {
                             val colorRing = if (post.relationship == "Second-Degree Contact") {
-                                HushViolet
+                                InstagramPink
                             } else if (post.relationship == "Me") {
-                                HushViolet
+                                NeonTeal
                             } else {
-                                HushViolet
+                                WhatsAppGreen
                             }
                             drawArc(
                                 color = colorRing,
@@ -1060,7 +1169,7 @@ fun InstagramPostCard(
                         Spacer(modifier = Modifier.width(6.dp))
 
                         // Relationship Label Badge
-                        val badgeColor = if (post.relationship == "Second-Degree Contact") HushViolet else HushViolet
+                        val badgeColor = if (post.relationship == "Second-Degree Contact") InstagramPink else NeonTeal
                         val displayText = if (post.relationship == "Second-Degree Contact") {
                             "via ${post.intermediaryName}"
                         } else if (post.relationship == "Me") {
@@ -1083,7 +1192,7 @@ fun InstagramPostCard(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = formatTimeAgo(post.story.timestamp),
+                        text = formatTimeAgo(currentStory.timestamp),
                         color = MutedText,
                         fontSize = 11.sp
                     )
@@ -1092,8 +1201,10 @@ fun InstagramPostCard(
                 // Delete button for owner text posts
                 if (post.relationship == "Me") {
                     IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(34.dp).testTag("delete_post_${post.story.id}")
+                        onClick = { onDelete(currentStory.id) },
+                        modifier = Modifier
+                            .size(34.dp)
+                            .testTag("delete_post_${currentStory.id}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
@@ -1107,76 +1218,125 @@ fun InstagramPostCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Large Styled Story Card Post (Instagram standard style)
-            Box(
+            // Large Styled Story Card Post - Horizontal Swiping Carousel
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(gradientBrush)
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Background subtle sticker emoji
-                if (post.story.emojiSticker.isNotBlank()) {
-                    Text(
-                        text = post.story.emojiSticker,
-                        fontSize = 90.sp,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(bottom = 4.dp, end = 4.dp)
-                            .alpha(0.18f)
+            ) { page ->
+                val story = post.stories[page]
+                val pageGradientBrush = Brush.linearGradient(
+                    colors = listOf(
+                        story.startColorHex.toColor(),
+                        story.endColorHex.toColor()
                     )
+                )
+                
+                // Real-time countdown calculation specifically for this slide
+                val pageTimeLeftMs = statusLifespan - (now - story.timestamp)
+                val pageTimeLeftText = if (pageTimeLeftMs <= 0) {
+                    "Expiring now..."
+                } else if (pageTimeLeftMs < 60 * 1000) {
+                    "${pageTimeLeftMs / 1000}s left"
+                } else if (pageTimeLeftMs < 60 * 60 * 1000) {
+                    "${pageTimeLeftMs / (60 * 1000)}m left"
+                } else {
+                    val hrs = pageTimeLeftMs / (60 * 60 * 1000)
+                    val mins = (pageTimeLeftMs % (60 * 60 * 1000)) / (60 * 1000)
+                    "${hrs}h ${mins}m left"
                 }
 
-                // Floating real-time status countdown tag (Top-Left corner of post image)
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .fillMaxSize()
+                        .background(pageGradientBrush)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Timer,
-                            contentDescription = "Time Left",
-                            tint = HushViolet,
-                            modifier = Modifier.size(11.dp)
-                        )
+                    // Background subtle sticker emoji
+                    if (story.emojiSticker.isNotBlank()) {
                         Text(
-                            text = timeLeftText,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            text = story.emojiSticker,
+                            fontSize = 90.sp,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 4.dp, end = 4.dp)
+                                .alpha(0.18f)
                         )
                     }
-                }
 
-                // Main post typographic text content
-                val postFont = when (post.story.fontFamily) {
-                    "Mono" -> FontFamily.Monospace
-                    "Cursive" -> FontFamily.Cursive
-                    "Sans" -> FontFamily.SansSerif
-                    else -> FontFamily.Serif
+                    // Floating real-time status countdown tag (Top-Left corner of post image)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = "Time Left",
+                                tint = NeonTeal,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = pageTimeLeftText,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Main post typographic text content
+                    val postFont = when (story.fontFamily) {
+                        "Mono" -> FontFamily.Monospace
+                        "Cursive" -> FontFamily.Cursive
+                        "Sans" -> FontFamily.SansSerif
+                        else -> FontFamily.Serif
+                    }
+                    
+                    Text(
+                        text = story.content,
+                        color = story.textColorHex.toColor(),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center,
+                        fontFamily = postFont,
+                        lineHeight = 24.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                    )
+
+                    // Thin indicator segments at the top (Instagram Active Status style)
+                    if (post.stories.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            repeat(post.stories.size) { i ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(if (i == page) Color.White else Color.White.copy(alpha = 0.35f))
+                                )
+                            }
+                        }
+                    }
                 }
-                
-                Text(
-                    text = post.story.content,
-                    color = post.story.textColorHex.toColor(),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                    fontFamily = postFont,
-                    lineHeight = 24.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -1189,12 +1349,14 @@ fun InstagramPostCard(
                 IconButton(
                     onClick = {
                         isLiked = !isLiked
-                        onLike() // trigger simulated visit/view
+                        onLike(currentStory.id) // trigger simulated visit/view
                         if (isLiked) {
                             Toast.makeText(context, "Liked", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    modifier = Modifier.size(36.dp).testTag("like_post_${post.story.id}")
+                    modifier = Modifier
+                        .size(36.dp)
+                        .testTag("like_post_${currentStory.id}")
                 ) {
                     Icon(
                         imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -1219,7 +1381,7 @@ fun InstagramPostCard(
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "${post.story.views} views",
+                        text = "${currentStory.views} views",
                         color = MutedText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
@@ -1228,8 +1390,8 @@ fun InstagramPostCard(
             }
 
             // Inline comments/replies listing (Only exists when feed/post is viewed)
-            val postReplies = remember(allReplies, post.story.id) {
-                allReplies.filter { it.originalStatusId == post.story.id }
+            val postReplies = remember(allReplies, currentStory.id) {
+                allReplies.filter { it.originalStatusId == currentStory.id }
             }
 
             if (postReplies.isNotEmpty()) {
@@ -1240,7 +1402,7 @@ fun InstagramPostCard(
                 Text(
                     text = "REPLIES & COMMENTS",
                     fontSize = 11.sp,
-                    color = HushViolet,
+                    color = NeonTeal,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
@@ -1333,27 +1495,29 @@ fun InstagramPostCard(
                             unfocusedTextColor = LightText,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = HushViolet
+                            cursorColor = NeonTeal
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .testTag("inline_reply_input_${post.story.id}"),
+                            .testTag("inline_reply_input_${currentStory.id}"),
                         singleLine = true
                     )
 
                     IconButton(
                         onClick = {
                             if (replyText.isNotBlank()) {
-                                onReply(replyText)
+                                onReply(currentStory.id, replyText)
                                 replyText = ""
                             }
                         },
-                        modifier = Modifier.size(32.dp).testTag("inline_reply_send_${post.story.id}")
+                        modifier = Modifier
+                            .size(32.dp)
+                            .testTag("inline_reply_send_${currentStory.id}")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send Reply",
-                            tint = HushViolet,
+                            tint = NeonTeal,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -1441,7 +1605,7 @@ fun DiscoveryGraphScreen(
                     Icon(
                         imageVector = Icons.Default.Hub,
                         contentDescription = "Contact Hub",
-                        tint = HushViolet,
+                        tint = NeonTeal,
                         modifier = Modifier.size(32.dp)
                     )
                     Spacer(modifier = Modifier.width(16.dp))
@@ -1469,7 +1633,7 @@ fun DiscoveryGraphScreen(
             Text(
                 text = "YOUR DIRECT LEGS (1ST DEGREE)",
                 fontSize = 11.sp,
-                color = HushViolet,
+                color = WhatsAppGreen,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
@@ -1513,7 +1677,7 @@ fun DiscoveryGraphScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(currentUser?.avatarColorHex?.toColor() ?: HushViolet),
+                                .background(currentUser?.avatarColorHex?.toColor() ?: NeonTeal),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(text = currentUser?.avatarEmoji ?: "🦁", fontSize = 16.sp)
@@ -1528,7 +1692,7 @@ fun DiscoveryGraphScreen(
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 drawLine(
-                                    color = HushViolet,
+                                    color = WhatsAppGreen,
                                     start = androidx.compose.ui.geometry.Offset(0f, size.height / 2),
                                     end = androidx.compose.ui.geometry.Offset(size.width, size.height / 2),
                                     strokeWidth = 3.dp.toPx(),
@@ -1542,11 +1706,11 @@ fun DiscoveryGraphScreen(
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(HushViolet.copy(alpha = 0.15f))
-                                    .border(1.dp, HushViolet, RoundedCornerShape(8.dp))
+                                    .background(WhatsAppGreen.copy(alpha = 0.15f))
+                                    .border(1.dp, WhatsAppGreen, RoundedCornerShape(8.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Text("DIRECT", fontSize = 8.sp, color = HushViolet, fontWeight = FontWeight.Bold)
+                                Text("DIRECT", fontSize = 8.sp, color = WhatsAppGreen, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -1585,7 +1749,7 @@ fun DiscoveryGraphScreen(
             Text(
                 text = "SECOND-DEGREE PATHS (2ND DEGREE)",
                 fontSize = 11.sp,
-                color = HushViolet,
+                color = InstagramPink,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
@@ -1642,7 +1806,7 @@ fun DiscoveryGraphScreen(
                     Box(modifier = Modifier.weight(1f).height(20.dp)) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawLine(
-                                color = HushViolet,
+                                color = WhatsAppGreen,
                                 start = androidx.compose.ui.geometry.Offset(0f, size.height / 2),
                                 end = androidx.compose.ui.geometry.Offset(size.width, size.height / 2),
                                 strokeWidth = 2.dp.toPx()
@@ -1662,14 +1826,14 @@ fun DiscoveryGraphScreen(
                             Text(text = intermediary.avatarEmoji, fontSize = 16.sp)
                         }
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(intermediary.name.split(" ").first(), fontSize = 10.sp, color = HushViolet, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(intermediary.name.split(" ").first(), fontSize = 10.sp, color = WhatsAppGreen, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
                     // Vector link 2
                     Box(modifier = Modifier.weight(1f).height(20.dp)) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawLine(
-                                color = HushViolet,
+                                color = InstagramPink,
                                 start = androidx.compose.ui.geometry.Offset(0f, size.height / 2),
                                 end = androidx.compose.ui.geometry.Offset(size.width, size.height / 2),
                                 strokeWidth = 2.dp.toPx()
@@ -1689,7 +1853,7 @@ fun DiscoveryGraphScreen(
                             Text(text = target.avatarEmoji, fontSize = 16.sp)
                         }
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(target.name.split(" ").first(), fontSize = 10.sp, color = HushViolet, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(target.name.split(" ").first(), fontSize = 10.sp, color = InstagramPink, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -1723,11 +1887,6 @@ fun WhispersChatListScreen(
                     fontFamily = FontFamily.Serif
                 ),
                 color = Color.White
-            )
-            Text(
-                text = "Private replies to status updates.",
-                color = MutedText,
-                fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -1848,6 +2007,7 @@ fun DirectMessageChatScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Box(
                 modifier = Modifier
@@ -1880,13 +2040,13 @@ fun DirectMessageChatScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = partner.name, color = LightText, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
-                        Text(text = partner.bio, color = HushViolet, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(text = partner.bio, color = WhatsAppGreen, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Encrypted",
-                        tint = HushViolet,
+                        tint = WhatsAppGreen,
                         modifier = Modifier.size(16.dp).padding(end = 4.dp)
                     )
                 }
@@ -1914,7 +2074,7 @@ fun DirectMessageChatScreen(
                             unfocusedContainerColor = MidnightBlack,
                             focusedTextColor = LightText,
                             unfocusedTextColor = LightText,
-                            cursorColor = HushViolet,
+                            cursorColor = NeonTeal,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent
                         ),
@@ -1933,7 +2093,7 @@ fun DirectMessageChatScreen(
                                 messageText = ""
                             }
                         },
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = HushViolet),
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = NeonTeal),
                         modifier = Modifier.size(46.dp).testTag("chat_send_btn")
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MidnightBlack, modifier = Modifier.size(18.dp))
@@ -1964,7 +2124,7 @@ fun DirectMessageChatScreen(
                     ) {
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isMe) HushViolet.copy(alpha = 0.9f) else SlateCard
+                                containerColor = if (isMe) NeonTeal.copy(alpha = 0.9f) else SlateCard
                             ),
                             shape = RoundedCornerShape(
                                 topStart = 16.dp,
@@ -1986,7 +2146,7 @@ fun DirectMessageChatScreen(
                                         Text(
                                             text = "Replied to Status 🤫",
                                             fontSize = 11.sp,
-                                            color = if (isMe) MidnightBlack.copy(alpha = 0.6f) else HushViolet,
+                                            color = if (isMe) MidnightBlack.copy(alpha = 0.6f) else NeonTeal,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
@@ -2098,17 +2258,12 @@ fun ContactDirectoryScreen(
         item {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Hush Realm Discovery",
+                text = "Contacts",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Serif
                 ),
                 color = Color.White
-            )
-            Text(
-                text = "Detect local contacts or explore secret connections to map private status hops.",
-                color = MutedText,
-                fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -2118,67 +2273,23 @@ fun ContactDirectoryScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = SlateCardSecondary),
                 shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, HushViolet.copy(alpha = 0.3f)),
+                border = BorderStroke(1.dp, NeonTeal.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth().testTag("sync_card")
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "REAL CONTACT DETECTION ENGINE",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = HushViolet,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Read on-device contacts via Android Contacts API to instantly detect registered users in your circle.",
-                        fontSize = 12.sp,
-                        color = MutedText
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Scan Real Contacts Button
+                    Button(
+                        onClick = {
+                            permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonTeal, contentColor = MidnightBlack),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("scan_real_contacts_btn")
                     ) {
-                        // Scan Real Contacts Button
-                        Button(
-                            onClick = {
-                                permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = HushViolet, contentColor = Color.White),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f).testTag("scan_real_contacts_btn")
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Contacts, contentDescription = "Scan", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Scan Device", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
-                        }
-
-                        // Simulate Sync Fallback Button
-                        Button(
-                            onClick = {
-                                val mockContacts = listOf(
-                                    Pair("Alice Rivera", "+15550002"),
-                                    Pair("Charlie Chen", "+15550003"),
-                                    Pair("Bob Miller", "+15550004"),
-                                    Pair("Diana Prince", "+15550005")
-                                )
-                                onSyncContacts(mockContacts)
-                                Toast.makeText(context, "Simulated device address book synced! 🤫", Toast.LENGTH_LONG).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SlateCardSecondary, contentColor = HushViolet),
-                            border = BorderStroke(1.dp, HushViolet.copy(alpha = 0.4f)),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.weight(1f).testTag("simulate_device_contacts_btn")
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.DeviceHub, contentDescription = "Simulate", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Simulate Sync", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Contacts, contentDescription = "Scan", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Scan Device Contacts", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     }
                 }
@@ -2198,14 +2309,8 @@ fun ContactDirectoryScreen(
                         text = "ADD CONTACT MANUALLY",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = HushViolet,
+                        color = NeonTeal,
                         letterSpacing = 1.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Register a specific number directly to your individual circle.",
-                        fontSize = 12.sp,
-                        color = MutedText
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -2215,9 +2320,9 @@ fun ContactDirectoryScreen(
                         label = { Text("Friend's Full Name", fontSize = 12.sp) },
                         placeholder = { Text("e.g. John Doe", color = MutedText) },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HushViolet,
+                            focusedBorderColor = NeonTeal,
                             unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                            focusedLabelColor = HushViolet,
+                            focusedLabelColor = NeonTeal,
                             unfocusedLabelColor = MutedText,
                             focusedTextColor = LightText,
                             unfocusedTextColor = LightText
@@ -2232,9 +2337,9 @@ fun ContactDirectoryScreen(
                         label = { Text("Friend's Phone Number", fontSize = 12.sp) },
                         placeholder = { Text("e.g. +14150009999", color = MutedText) },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = HushViolet,
+                            focusedBorderColor = NeonTeal,
                             unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                            focusedLabelColor = HushViolet,
+                            focusedLabelColor = NeonTeal,
                             unfocusedLabelColor = MutedText,
                             focusedTextColor = LightText,
                             unfocusedTextColor = LightText
@@ -2273,8 +2378,8 @@ fun ContactDirectoryScreen(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "MUTUAL NETWORK DISCOVERY (TAP TO EXPLORE SECRET COHORT)",
-                fontSize = 11.sp,
+                text = "Your Network",
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MutedText,
                 letterSpacing = 1.sp
@@ -2288,7 +2393,7 @@ fun ContactDirectoryScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = SlateCard),
                 shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, if (isDirect) HushViolet.copy(alpha = 0.3f) else Color.Transparent),
+                border = BorderStroke(1.dp, if (isDirect) WhatsAppGreen.copy(alpha = 0.3f) else Color.Transparent),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { exploringUser = user }
@@ -2326,7 +2431,7 @@ fun ContactDirectoryScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = if (isDirect) "Saved (1st Degree)" else "Extended (2nd Degree)",
-                                color = if (isDirect) HushViolet else HushViolet,
+                                color = if (isDirect) WhatsAppGreen else NeonTeal,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -2353,7 +2458,7 @@ fun ContactDirectoryScreen(
                             onClick = { onAddContact(user.phoneNumber, user.name) },
                             modifier = Modifier.testTag("add_contact_${user.phoneNumber}")
                         ) {
-                            Icon(Icons.Default.PersonAdd, contentDescription = "Add", tint = HushViolet)
+                            Icon(Icons.Default.PersonAdd, contentDescription = "Add", tint = NeonTeal)
                         }
                     }
                 }
@@ -2392,7 +2497,7 @@ fun ContactDirectoryScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(text = exprUser.name, color = LightText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Hush Circle Explorer", color = HushViolet, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Hush Circle Explorer", color = NeonTeal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             },
@@ -2417,7 +2522,7 @@ fun ContactDirectoryScreen(
                         text = "SAVED CONNECTIONS (${exprUserContacts.size})",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = HushViolet,
+                        color = NeonTeal,
                         letterSpacing = 0.5.sp
                     )
 
@@ -2476,11 +2581,11 @@ fun ContactDirectoryScreen(
                                             fontSize = 10.sp
                                         )
                                         if (isMeSelf) {
-                                            Text("Saves you back (Mutual link) 🗝️", color = HushViolet, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            Text("Saves you back (Mutual link) 🗝️", color = WhatsAppGreen, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                         } else if (isMeDirect) {
-                                            Text("Direct in your circle too", color = HushViolet, fontSize = 9.sp)
+                                            Text("Direct in your circle too", color = WhatsAppGreen, fontSize = 9.sp)
                                         } else {
-                                            Text("Accessible via ${exprUser.name}", color = HushViolet, fontSize = 9.sp)
+                                            Text("Accessible via ${exprUser.name}", color = NeonTeal, fontSize = 9.sp)
                                         }
                                     }
 
@@ -2493,7 +2598,7 @@ fun ContactDirectoryScreen(
                                                 },
                                                 modifier = Modifier.size(28.dp)
                                             ) {
-                                                Icon(Icons.Default.PersonAdd, contentDescription = "Add Me", tint = HushViolet, modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Default.PersonAdd, contentDescription = "Add Me", tint = NeonTeal, modifier = Modifier.size(16.dp))
                                             }
                                         }
 
@@ -2518,7 +2623,7 @@ fun ContactDirectoryScreen(
                             text = "SIMULATE SECRET CONNECTION FOR ${exprUser.name.uppercase()}:",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = HushViolet,
+                            color = NeonTeal,
                             letterSpacing = 0.5.sp
                         )
                         Text(
@@ -2551,7 +2656,7 @@ fun ContactDirectoryScreen(
                                             .size(40.dp)
                                             .clip(CircleShape)
                                             .background(candidate.avatarColorHex.toColor())
-                                            .border(1.dp, HushViolet.copy(alpha = 0.4f), CircleShape),
+                                            .border(1.dp, NeonTeal.copy(alpha = 0.4f), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(candidate.avatarEmoji, fontSize = 18.sp)
@@ -2574,7 +2679,7 @@ fun ContactDirectoryScreen(
             confirmButton = {
                 TextButton(
                     onClick = { exploringUser = null },
-                    colors = ButtonDefaults.textButtonColors(contentColor = HushViolet)
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonTeal)
                 ) {
                     Text("Close Explorer", fontWeight = FontWeight.Bold)
                 }
@@ -2594,13 +2699,13 @@ fun StatusCreatorScreen(
 ) {
     var text by remember { mutableStateOf("") }
     
-    // Gradient definitions inside editor
-    val gradients = listOf(
-        Pair("#8A2387", "#E94057"), // Purple to Red (IG Classic vibe)
-        Pair("#FF512F", "#DD2476"), // Sunset Orange
-        Pair("#1d976c", "#93f9b9"), // Neo Emerald
-        Pair("#0f2027", "#2c5364"), // Clean Tech Black
-        Pair("#ff007f", "#7f00ff")  // Cyber Pink
+    // Gradient definitions inside editor matched with custom Mood labels
+    val moods = listOf(
+        Triple("#8A2387", "#E94057", "Passion"),
+        Triple("#FF512F", "#DD2476", "Sunset"),
+        Triple("#1d976c", "#93f9b9", "Calm"),
+        Triple("#0f2027", "#2c5364", "Silent"),
+        Triple("#ff007f", "#7f00ff", "Hyper")
     )
     
     var selectedGradientIndex by remember { mutableStateOf(0) }
@@ -2613,13 +2718,26 @@ fun StatusCreatorScreen(
     )
     var selectedFontIndex by remember { mutableStateOf(0) }
 
-    val stickers = listOf("", "🤫", "✨", "🔥", "🌸", "👑", "🍕", "🦖", "🛸")
     var selectedSticker by remember { mutableStateOf("") }
+    var stickerScale by remember { mutableStateOf(1f) }
+
+    // visual bounce reaction animation for the active Vibe sticker
+    val animatedScale by animateFloatAsState(
+        targetValue = stickerScale,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        finishedListener = { stickerScale = 1f }
+    )
+
+    LaunchedEffect(selectedSticker) {
+        if (selectedSticker.isNotBlank()) {
+            stickerScale = 1.34f
+        }
+    }
 
     val brush = Brush.linearGradient(
         colors = listOf(
-            gradients[selectedGradientIndex].first.toColor(),
-            gradients[selectedGradientIndex].second.toColor()
+            moods[selectedGradientIndex].first.toColor(),
+            moods[selectedGradientIndex].second.toColor()
         )
     )
 
@@ -2660,8 +2778,8 @@ fun StatusCreatorScreen(
                             onPost(
                                 text,
                                 fonts[selectedFontIndex].first,
-                                gradients[selectedGradientIndex].first,
-                                gradients[selectedGradientIndex].second,
+                                moods[selectedGradientIndex].first,
+                                moods[selectedGradientIndex].second,
                                 selectedSticker
                             )
                         }
@@ -2682,7 +2800,14 @@ fun StatusCreatorScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (selectedSticker.isNotBlank()) {
-                        Text(text = selectedSticker, fontSize = 64.sp)
+                        Text(
+                            text = selectedSticker,
+                            fontSize = 72.sp,
+                            modifier = Modifier.graphicsLayer(
+                                scaleX = animatedScale,
+                                scaleY = animatedScale
+                            )
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
@@ -2740,52 +2865,71 @@ fun StatusCreatorScreen(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Sticker selection row
+                // Freeform Vibe emoji text field
                 Column {
-                    Text("Add Sticker", fontSize = 11.sp, color = MutedText, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(stickers) { sticker ->
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(if (sticker == selectedSticker) Color.White.copy(alpha = 0.3f) else Color.Transparent)
-                                    .clickable { selectedSticker = sticker },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (sticker.isEmpty()) "None" else sticker,
-                                    fontSize = if (sticker.isEmpty()) 11.sp else 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (sticker.isEmpty()) MutedText else Color.Unspecified
-                                )
+                    Text("Vibe", fontSize = 11.sp, color = MutedText, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = selectedSticker,
+                        onValueChange = { input ->
+                            if (input.length <= 2) {
+                                selectedSticker = input
                             }
-                        }
-                    }
+                        },
+                        placeholder = { Text("Search or type any vibe emoji... e.g. 🤫", color = MutedText, fontSize = 12.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = NeonTeal,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedLabelColor = NeonTeal,
+                            unfocusedLabelColor = MutedText,
+                            cursorColor = NeonTeal
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("custom_vibe_field")
+                    )
                 }
 
-                // Gradient selector
+                // Mood Gradient selector with labels
                 Column {
-                    Text("Pick Atmosphere", fontSize = 11.sp, color = MutedText, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(gradients.size) { index ->
+                    Text("Mood", fontSize = 11.sp, color = MutedText, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(moods.size) { index ->
+                            val mood = moods[index]
                             val gradBrush = Brush.linearGradient(
-                                colors = listOf(gradients[index].first.toColor(), gradients[index].second.toColor())
+                                colors = listOf(mood.first.toColor(), mood.second.toColor())
                             )
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(gradBrush)
-                                    .border(
-                                        2.dp,
-                                        if (index == selectedGradientIndex) Color.White else Color.Transparent,
-                                        CircleShape
-                                    )
-                                    .clickable { selectedGradientIndex = index }
-                            )
+                            val isSelected = index == selectedGradientIndex
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { selectedGradientIndex = index }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(gradBrush)
+                                        .border(
+                                            2.dp,
+                                            if (isSelected) Color.White else Color.Transparent,
+                                            CircleShape
+                                        )
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = mood.third,
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) Color.White else MutedText,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         }
                     }
                 }
@@ -2980,7 +3124,7 @@ fun FullscreenStatusViewer(
                         }
                         
                         // Instagram/WhatsApp discover indicator
-                        val connectionColor = if (statusGroup.relationship == "Second-Degree Contact") HushViolet else HushViolet
+                        val connectionColor = if (statusGroup.relationship == "Second-Degree Contact") InstagramPink else WhatsAppGreen
                         val connectionLabel = if (statusGroup.relationship == "Second-Degree Contact") {
                             "via ${statusGroup.intermediaryName}"
                         } else if (statusGroup.relationship == "Me") {
@@ -3119,7 +3263,7 @@ fun FullscreenStatusViewer(
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Visibility, contentDescription = "Views", tint = HushViolet, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Visibility, contentDescription = "Views", tint = NeonTeal, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "${currentStory.views} views",

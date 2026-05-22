@@ -87,6 +87,9 @@ class HushViewModel(private val repository: HushRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
+    private val _scannedContacts = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val scannedContacts: StateFlow<List<Pair<String, String>>> = _scannedContacts.asStateFlow()
+
     // Active Chat flow stateholder
     private val _activeChatPartner = MutableStateFlow<String?>(null)
     val activeChatPartner: StateFlow<String?> = _activeChatPartner.asStateFlow()
@@ -191,6 +194,7 @@ class HushViewModel(private val repository: HushRepository) : ViewModel() {
     }
 
     fun syncDeviceContacts(deviceContacts: List<Pair<String, String>>) {
+        _scannedContacts.value = deviceContacts
         viewModelScope.launch {
             val users = allUsersState.value
             val me = currentUserState.value ?: return@launch
